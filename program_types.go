@@ -14,25 +14,69 @@ import (
 )
 
 type RDSInfo struct {
-	PI          uint16
-	ProgramType uint16
-	RadioText   [64]byte
+	PI                   uint16
+	ProgramType          uint16
+	PSName               [8]byte
+	RadioText            [64]byte
+	TrafficProgram       bool
+	TrafficAnnouncement  bool
+	IsMusic              bool
+	IsStereo             bool
+	IsArtificialHead     bool
+	IsCompressed         bool
+	IsDynamicProgramType bool
+}
+
+func NewRDSInfo() *RDSInfo {
+	return &RDSInfo{
+		IsMusic: true,
+	}
 }
 
 func (rdsinfo *RDSInfo) Update(a, b, c, d uint16) {
 	rdsinfo.PI = a
 	rdsinfo.ProgramType = b >> 5 & 0x1F
 
-	group := b >> 12
-	switch group {
-	case 0:
+	// traffic program?
+	rdsinfo.TrafficProgram = bool(((b >> 10) & 0x1) == 1)
 
-	case 2:
-		offset := b & 0xf
-		rdsinfo.RadioText[offset*4] = byte(c >> 8)
-		rdsinfo.RadioText[(offset*4)+1] = byte(c & 0xff)
-		rdsinfo.RadioText[(offset*4)+2] = byte(d >> 8)
-		rdsinfo.RadioText[(offset*4)+3] = byte(d & 0xff)
+	// further processing dependent on group code
+	group := b >> 12
+	isGroupB := bool(((b >> 11) & 0x1) == 1)
+
+	// process groupA
+	if !isGroupB {
+		switch group {
+		case 0:
+			rdsinfo.TrafficAnnouncement = bool(((b >> 4) & 0x1) == 1)
+
+			di := bool(((b >> 2) & 0x1) == 1)
+			ci := b & 0x3
+			switch ci {
+			case 0:
+				rdsinfo.IsDynamicProgramType = di
+				rdsinfo.PSName[0] = byte(d >> 8)
+				rdsinfo.PSName[1] = byte(d & 0xff)
+			case 1:
+				rdsinfo.IsCompressed = di
+				rdsinfo.PSName[2] = byte(d >> 8)
+				rdsinfo.PSName[3] = byte(d & 0xff)
+			case 2:
+				rdsinfo.IsArtificialHead = di
+				rdsinfo.PSName[4] = byte(d >> 8)
+				rdsinfo.PSName[5] = byte(d & 0xff)
+			case 3:
+				rdsinfo.IsStereo = di
+				rdsinfo.PSName[6] = byte(d >> 8)
+				rdsinfo.PSName[7] = byte(d & 0xff)
+			}
+		case 2:
+			offset := b & 0xf
+			rdsinfo.RadioText[offset*4] = byte(c >> 8)
+			rdsinfo.RadioText[(offset*4)+1] = byte(c & 0xff)
+			rdsinfo.RadioText[(offset*4)+2] = byte(d >> 8)
+			rdsinfo.RadioText[(offset*4)+3] = byte(d & 0xff)
+		}
 	}
 }
 
@@ -40,7 +84,10 @@ func (rdsinfo *RDSInfo) String() string {
 	rv := ""
 	rv += "PI: " + fmt.Sprintf("%d", rdsinfo.PI) + "\n"
 	rv += "Program Type: " + ProgramTypeByCode(int(rdsinfo.ProgramType)).Type + "\n"
-	rv += "Radio Text:" + string(rdsinfo.RadioText[:])
+	rv += "Program Service Name: " + string(rdsinfo.PSName[:]) + "\n"
+	rv += "Radio Text:" + string(rdsinfo.RadioText[:]) + "\n"
+	rv += fmt.Sprintf("Traffic Program: %t Traffic Announcement: %t Music: %t\n", rdsinfo.TrafficProgram, rdsinfo.TrafficAnnouncement, rdsinfo.IsMusic)
+	rv += fmt.Sprintf("Stereo: %t  Artificial Head: %t Compressed: %t Dynamic Program Type: %t", rdsinfo.IsStereo, rdsinfo.IsArtificialHead, rdsinfo.IsCompressed, rdsinfo.IsDynamicProgramType)
 	return rv
 }
 
