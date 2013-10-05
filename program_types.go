@@ -9,6 +9,41 @@
 
 package rds
 
+import (
+	"fmt"
+)
+
+type RDSInfo struct {
+	PI          uint16
+	ProgramType uint16
+	RadioText   [64]byte
+}
+
+func (rdsinfo *RDSInfo) Update(a, b, c, d uint16) {
+	rdsinfo.PI = a
+	rdsinfo.ProgramType = b >> 5 & 0x1F
+
+	group := b >> 12
+	switch group {
+	case 0:
+
+	case 2:
+		offset := b & 0xf
+		rdsinfo.RadioText[offset*4] = byte(c >> 8)
+		rdsinfo.RadioText[(offset*4)+1] = byte(c & 0xff)
+		rdsinfo.RadioText[(offset*4)+2] = byte(d >> 8)
+		rdsinfo.RadioText[(offset*4)+3] = byte(d & 0xff)
+	}
+}
+
+func (rdsinfo *RDSInfo) String() string {
+	rv := ""
+	rv += "PI: " + fmt.Sprintf("%d", rdsinfo.PI) + "\n"
+	rv += "Program Type: " + ProgramTypeByCode(int(rdsinfo.ProgramType)).Type + "\n"
+	rv += "Radio Text:" + string(rdsinfo.RadioText[:])
+	return rv
+}
+
 func ProgramTypeByCode(code int) ProgramType {
 	if code < 0 || code > 31 {
 		code = 0
